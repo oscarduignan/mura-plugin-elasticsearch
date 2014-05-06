@@ -1,0 +1,12 @@
+{
+    "mappings": {
+       "muraContent": {
+            "properties": {
+                "title": { "type": "string" },
+                "path": { "type": "string", "index": "not_analyzed" },
+                "type": { "type": "string", "index": "not_analyzed" },
+                "subType": { "type": "string", "index": "not_analyzed" }
+            }
+        }
+    }
+}
