@@ -2,15 +2,18 @@ component extends="mxunit.framework.TestCase" {
 
     function setUp() {
         body = { test=1 };
-        indexName = lcase(createUUID()); // index names must be lowercase
+        testIndices = [ lcase(createUUID()), lcase(createUUID()) ];
+        aliasName = lcase(createUUID());
 
         elasticSearch = new ElasticSearchService("localhost:9200");
         elasticSearch.setHttpRequestService(new HttpRequestService());
     }
 
     function tearDown() {
-        if( elasticSearch.indexExists(indexName) )
-            elasticSearch.deleteIndex(indexName);
+        for (var index in testIndices) {
+            if( elasticSearch.indexExists(index) )
+                elasticSearch.deleteIndex(index);
+        }
     }
 
 /*
@@ -44,22 +47,64 @@ component extends="mxunit.framework.TestCase" {
 */
 
     function test_indexExists_should_return_false_when_index_does_not_exist() {
-        assertFalse(elasticSearch.indexExists(createUUID()));
+        assertFalse(elasticSearch.indexExists(testIndices[1]));
     }
 
-    function test_indexExists_should_return_true_when_index_does_exist() {
-        // TODO need to think about what to do when actions return an error
-        // probably be a good idea to raise a coldfusion exception. Do I do
-        // this by parsing response or do I catch errors before the request
-        // gets made?
-        elasticSearch.createIndex(indexName);
-        assertTrue(elasticSearch.indexExists(indexName));
+    function test_indexExists_should_return_true_when_index_exists() {
+        elasticSearch.createIndex(testIndices[1]);
+        assertTrue(elasticSearch.indexExists(testIndices[1]));
     }
 
-    function test_createIndex_should_create_index_when_given_valid_index_name() {
-        assertFalse(elasticSearch.indexExists(indexName));
-        elasticSearch.createIndex(indexName);
-        assertTrue(elasticSearch.indexExists(indexName));
+    function test_createIndex_should_create_index_when_given_valid_non_existant_index_name() {
+        assertFalse(elasticSearch.indexExists(testIndices[1]));
+        elasticSearch.createIndex(testIndices[1]);
+        assertTrue(elasticSearch.indexExists(testIndices[1]));
     }
+
+    // function test_createIndex_should_?_when_given_an_existing_index_name() {}
+    // function test_createIndex_should_?_when_given_an_invalid_index_name() {}
+
+    function test_deleteIndex_should_delete_index_when_given_existing_index_name() {
+        elasticSearch.createIndex(testIndices[1]);
+        assertTrue(elasticSearch.indexExists(testIndices[1]));
+        elasticSearch.deleteIndex(testIndices[1]);
+        assertFalse(elasticSearch.indexExists(testIndices[1]));
+    }
+
+    // function test_deleteIndex_should_?_when_when_given_non_existant_index_name() {}
+    // function test_deleteIndex_should_?_when_when_given_non_existant_index_name() {}
+
+    function test_aliasExists_should_return_false_when_alias_does_not_exist() {
+        assertFalse(elasticSearch.aliasExists(testIndices[1]));
+    }
+
+    function test_aliasExists_should_return_true_when_alias_exists() {
+        elasticSearch.createIndex(testIndices[1]);
+        elasticSearch.createAlias(aliasName, testIndices[1]);
+        assertTrue(elasticSearch.aliasExists(aliasName));
+    }
+
+    function test_removeAlias_should_delete_alias_when_given_existing_alias_name() {
+        elasticSearch.createIndex(testIndices[1]);
+        elasticSearch.createAlias(aliasName, testIndices[1]);
+        assertTrue(elasticSearch.aliasExists(aliasName));
+        elasticSearch.removeAlias(aliasName);
+        assertFalse(elasticSearch.aliasExists(aliasName));
+    }
+
+    // function test_removeAlias_should_?_when_given_non_existant_index_name() {}
+
+    function test_changeAlias_should_change_alias_when_given_an_existing_alias() {
+        elasticSearch.createIndex(testIndices[1]);
+        elasticSearch.createIndex(testIndices[2]);
+        elasticSearch.createAlias(aliasName, testIndices[1]);
+        assertTrue(elasticSearch.aliasExists(name=aliasName, index=testIndices[1]));
+        assertFalse(elasticSearch.aliasExists(name=aliasName, index=testIndices[2]));
+        elasticSearch.changeAlias(aliasName, testIndices[2]);
+        assertFalse(elasticSearch.aliasExists(name=aliasName, index=testIndices[1]));
+        assertTrue(elasticSearch.aliasExists(name=aliasName, index=testIndices[2]));
+    }
+
+    // function test_changeAlias_should_?_when_given_a_non_existant_alias() {}
 
 }

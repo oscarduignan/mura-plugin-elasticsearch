@@ -8,10 +8,10 @@ component {
         struct params={},
         struct headers={}
     ) {
-        var http = new http();
-
-        http.setUrl(arguments.url);
-        http.setMethod(arguments.method);
+        var http = new http(
+            url = arguments.url,
+            method = arguments.method
+        );
 
         if (isDefined("arguments.auth")) {
             http.setUsername(auth[1]);

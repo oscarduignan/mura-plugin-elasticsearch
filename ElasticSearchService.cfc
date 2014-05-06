@@ -79,7 +79,7 @@ component accessors=true {
     ) {
         return makeHttpRequest(
             method="post",
-            url=getUrl("_alias"),
+            url=getUrl("_aliases"),
             body={
                 "actions"=[
                     {"add"= {"index"=index, "alias"=name}}
@@ -88,10 +88,42 @@ component accessors=true {
         );
     }
 
+    function removeAlias(
+        required name,
+        index="_all"
+    ) {
+        return makeHttpRequest(
+            method="post",
+            url=getUrl("_aliases"),
+            body={
+                "actions"=[
+                    {"remove"= {"index"=index, "alias"=name}}
+                ]
+            }
+        );
+    }
+
+    function changeAlias(
+        required name,
+        required index,
+        previousIndex="_all"
+    ) {
+        return makeHttpRequest(
+            method="post",
+            url=getUrl("_aliases"),
+            body={
+                "actions"=[
+                    {"remove" = {"index"=previousIndex, "alias"=name}},
+                    {"add" = {"index"=index, "alias"=name}}
+                ]
+            }
+        );
+    }
+
     function updateAliases(required actions) {
         return makeHttpRequest(
             method="post",
-            url=getUrl("_alias"),
+            url=getUrl("_aliases"),
             body={
                 "actions"=actions
             }
@@ -109,11 +141,12 @@ component accessors=true {
     }
 
     function aliasExists(
-        required name
+        required name,
+        index=""
     ) {
-        return makeHttpRequet(
+        return makeHttpRequest(
             method="head",
-            url=getUrl("_alias", name)
+            url=getUrl(index, "_alias", name)
         ).getStatusCode() eq 200;
     }
 

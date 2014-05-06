@@ -58,12 +58,19 @@ component extends="mura.cfobject" accessors=true {
             feed.addParam(
                 field="elasticSearchLastIndexed",
                 condition="lt",
-                criteria=getMuraSite(siteid).getValue("elasticSearchLastIndexed")
+                criteria=getMuraSite(siteid).getValue("elasticSearchLastIndexed"),
+                datatype="timestamp"
+            );
+            feed.addParam(
+                relationship="OR",
+                field="elasticSearchLastIndexed",
+                condition="is",
+                criteria="NULL"
             );
             feed.setMaxItems(limit);
 
-            if (feed.recordCount()) {
-                var it = feed.getIterator().setNextN(limit);
+            var it = feed.getIterator().setNextN(limit);
+            if (it.recordCount()) {
                 while( it.hasNext() ) {
                     var content = it.next();
                     insertOrRemove(getNewIndex(siteid), content);
@@ -134,7 +141,9 @@ component extends="mura.cfobject" accessors=true {
             "title"=content.getTitle(),
             "path"=content.getPath(),
             "type"=content.getType(),
-            "subType"=content.getSubType()
+            "subType"=content.getSubType(),
+            "body"=content.getBody(),
+            "summary"=content.getSummary()
         };
     }
 
@@ -145,7 +154,7 @@ component extends="mura.cfobject" accessors=true {
         }
     }
 
-    private function createNewIndex(required siteid) {
+    function createNewIndex(required siteid) {
         var newIndex = createIndexName(siteid);
         var siteBean = getMuraSite(siteid);
         getElasticSearchService().createIndex(name=newIndex, body=getIndexJson(siteid));
@@ -202,10 +211,11 @@ component extends="mura.cfobject" accessors=true {
     private function makeNewIndexCurrentIndexForSite(required siteid) {
         var newIndex = getNewIndex(siteid);
         var siteBean = getMuraSite(siteid);
-        getElasticSearchService().updateAliases([
-            {"remove"= {"index"=siteBean.getValue("elasticSearchCurrentIndex"), "alias"=siteid}},
-            {"add"= {"index"=newIndex, "alias"=siteid}}
-        ]);
+        getElasticSearchService().changeAlias(
+            name=siteid,
+            index=newIndex,
+            previousIndex=siteBean.getValue("elasticSearchCurrentIndex")
+        );
         siteBean.setValue("elasticSearchCurrentIndex", newIndex);
         siteBean.setValue("elasticSearchNewIndex", "");
         siteBean.save();
