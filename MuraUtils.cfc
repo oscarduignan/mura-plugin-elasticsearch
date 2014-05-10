@@ -1,7 +1,10 @@
 component extends="mura.cfobject" accessors=true {
+    property name="ConfigBean";
+    property name="SettingsManager";
+    property name="PluginManager";
 
     function announceEvent(required name, event={}, firstOnly=false) {
-        return getBean("PluginManager").announceEvent(
+        return getPluginManager().announceEvent(
             eventToAnnounce=name,
             currentEventObject=(isObject(event) ? event : createEvent(event)),
             index=(firstOnly ? 1 : 0)
@@ -9,7 +12,7 @@ component extends="mura.cfobject" accessors=true {
     }
 
     function renderEvent(required name, event={}, firstOnly=true) {
-        return getBean("PluginManager").renderEvent(
+        return getPluginManager().renderEvent(
             eventToAnnounce=name,
             currentEventObject=(isObject(event) ? event : createEvent(event)),
             index=(firstOnly ? 1 : 0)
@@ -20,13 +23,20 @@ component extends="mura.cfobject" accessors=true {
         return createObject("component", "mura.event").init(event);
     }
 
+    function getPathToAssociatedFile(required content) {
+            var delim = getConfigBean().getFileDelim();
+            return (len(content.getFileID())
+                ? getConfigBean().getFileDir() & delim & content.getSiteID() & delim & "cache" & delim & "file" & delim & content.getFileID() & "." & content.getFileExt()
+                : "");
+    }
+
     function updateExtendedAttribute(
         required content,
         required name,
         required value
     ) {
         var attributeTypeColumn = (isDate(value) ? "datetimeValue" : (isNumeric(value) ? "numericValue" : "stringValue"));
-        var query = new query(datasource=getBean("MuraScope").globalConfig("datasource"));
+        var query = new query(datasource=getConfigBean().getDatasource());
         query.addParam(name="siteID", value=content.getSiteID(), cfsqltype="cf_sql_varchar");
         query.addParam(name="baseID", value=content.getContentHistID(), cfsqltype="cf_sql_varchar");
         query.addParam(name="attributeName", value=name, cfsqltype="cf_sql_varchar");
@@ -76,7 +86,7 @@ component extends="mura.cfobject" accessors=true {
     }
 
     function getSite(required siteid) {
-        return getBean("settingsManager").getSite(siteid);
+        return getSettingsManager().getSite(siteid);
     }
 
     /*** PRIVATE FUNCTIONS **************************************************/

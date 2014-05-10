@@ -71,6 +71,15 @@ component accessors=true {
         ).getStatusCode() eq 200;
     }
 
+    function refreshIndex(
+        name=""
+    ) {
+        return makeHttpRequest(
+            method="post",
+            url=getUrl(name, "_refresh")
+        );
+    }
+
     /*** ALIAS METHODS ******************************************************/
 
     function createAlias(
@@ -186,7 +195,7 @@ component accessors=true {
         return makeHttpRequest(
             method="head",
             url=getUrl(index, type, id)
-        );
+        ).getStatusCode() eq 200;
     }
 
     function removeDocument(

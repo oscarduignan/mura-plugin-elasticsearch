@@ -1,5 +1,10 @@
 /*
 
+    muraElasticSearch
+        removeContent(content)
+        updateContent(content)
+
+
     getBean("MuraElasticSearch")
         +updateIndex(content)
         +refreshIndex(siteid)
@@ -17,8 +22,9 @@
 component extends="mura.cfobject" accessors=true {
     property name="MuraUtils";
     property name="ElasticSearchService";
+    property name="ConfigBean";
 
-    function updateIndex(required content) {
+    function update(required content) {
         var siteid = content.getSiteID();
 
         initIndex(siteid);
@@ -43,6 +49,10 @@ component extends="mura.cfobject" accessors=true {
         });
     }
 
+    function remove(required content) {
+        removeContent(content.getSiteID(), content);
+    }
+
     function refreshIndex(required siteid) {
         createNewIndex(siteid);
 
@@ -53,27 +63,14 @@ component extends="mura.cfobject" accessors=true {
         hint="run periodically as a scheduled task with a low limit to populate new index in background, or once with a high limit to refresh immediately."
     {
         if (isCurrentlyReindexing(siteid)) {
-            var feed = getBean("feed");
-            feed.setSiteId(siteid);
-            feed.addParam(
-                field="elasticSearchLastIndexed",
-                condition="lt",
-                criteria=getMuraSite(siteid).getValue("elasticSearchLastIndexed"),
-                datatype="timestamp"
-            );
-            feed.addParam(
-                relationship="OR",
-                field="elasticSearchLastIndexed",
-                condition="is",
-                criteria="NULL"
-            );
-            feed.setMaxItems(limit);
-
-            var it = feed.getIterator().setNextN(limit);
-            if (it.recordCount()) {
-                while( it.hasNext() ) {
-                    var content = it.next();
-                    insertOrRemove(getNewIndex(siteid), content);
+            var remainingContent = getUnindexedContent(siteid, limit);
+            if (remainingContent.recordCount()) {
+                while( remainingContent.hasNext() ) {
+                    var content = remainingContent.next();
+                    writeDump(content.getElasticSearchLastIndexedContent());
+                    if (shouldIndex(content)) {
+                        insertOrRemove(getNewIndex(siteid), content);
+                    }
                     flagAsIndexed(content);
                 }
             } else {
@@ -98,9 +95,9 @@ component extends="mura.cfobject" accessors=true {
 
     private function insertOrRemove(required index, required content) {
         if (shouldIndex(content)) {
-            insertContent(index, content);
+            return insertContent(index, content);
         } else {
-            removeContent(index, content);
+            return removeContent(index, content);
         }
     }
 
@@ -136,14 +133,19 @@ component extends="mura.cfobject" accessors=true {
             : serializeJson(getDocument(content)));
     }
 
-    private function getDocument(required content) {
+    function getDocument(required content) {
         return {
             "title"=content.getTitle(),
             "path"=content.getPath(),
             "type"=content.getType(),
             "subType"=content.getSubType(),
             "body"=content.getBody(),
-            "summary"=content.getSummary()
+            "summary"=content.getSummary(),
+            "file"=(
+                len(content.getFileID())
+                    ? binaryEncode(fileReadBinary(getPathToAssociatedFile(content)), "base64")
+                    : ""
+            )
         };
     }
 
@@ -196,10 +198,14 @@ component extends="mura.cfobject" accessors=true {
         return getMuraUtils().renderEvent(name, event);
     }
 
+    private function getPathToAssociatedFile(required content) {
+        return getMuraUtils().getPathToAssociatedFile(content);
+    }
+
     private function flagAsIndexed(required content) {
         return getMuraUtils().updateExtendedAttribute(
             content,
-            "elasticSearchLastIndexed",
+            "elasticSearchLastIndexedContent",
             now()
         );
     }
@@ -219,6 +225,80 @@ component extends="mura.cfobject" accessors=true {
         siteBean.setValue("elasticSearchCurrentIndex", newIndex);
         siteBean.setValue("elasticSearchNewIndex", "");
         siteBean.save();
+    }
+
+    function getUnindexedContent(required siteid, required numeric limit) {
+        var q = new query(datasource=getConfigBean().getDatasource());
+        q.setSQL("
+            select
+            tcontent.siteid, tcontent.title, tcontent.menutitle, tcontent.restricted, tcontent.restrictgroups, 
+            tcontent.type, tcontent.subType, tcontent.filename, tcontent.displaystart, tcontent.displaystop, 
+            tcontent.remotesource, tcontent.remoteURL,tcontent.remotesourceURL, tcontent.keypoints, 
+            tcontent.contentID, tcontent.parentID, tcontent.approved, tcontent.isLocked, tcontent.contentHistID,tcontent.target, tcontent.targetParams, 
+            tcontent.releaseDate, tcontent.lastupdate,tcontent.summary, 
+            tfiles.fileSize,tfiles.fileExt,tcontent.fileid, 
+            tcontent.tags,tcontent.credits,tcontent.audience, tcontent.orderNo, 
+            tcontentstats.rating,tcontentstats.totalVotes,tcontentstats.downVotes,tcontentstats.upVotes, 
+            tcontentstats.comments, tparent.type parentType, null as kids, 
+            tcontent.path, tcontent.created, tcontent.nextn, tcontent.majorVersion, tcontent.minorVersion, tcontentstats.lockID, tcontentstats.lockType, tcontent.expires, 
+            tfiles.filename as AssocFilename,tcontent.displayInterval,tcontent.display,tcontentfilemetadata.altText as fileAltText 
+            from tcontent 
+            left Join tfiles on (tcontent.fileid=tfiles.fileid) 
+            left Join tcontentstats on (tcontent.contentid=tcontentstats.contentid 
+            and tcontent.siteid=tcontentstats.siteid) 
+            Left Join tcontent tparent on (tcontent.parentid=tparent.contentid 
+            and tcontent.siteid=tparent.siteid 
+            and tparent.active=1) 
+            Left Join tcontentfilemetadata on (tcontent.fileid=tcontentfilemetadata.fileid  and tcontent.contenthistid=tcontentfilemetadata.contenthistid) 
+            where 
+            tcontent.siteid = 'muracon' 
+            AND tcontent.active = 1
+            AND tcontent.moduleid = '00000000000000000000000000000000000' 
+            AND tcontent.type <>'Module' 
+            and ( 
+            tcontent.contentHistID NOT IN ( 
+            select tclassextenddata.baseID from tclassextenddata 
+            inner join tclassextendattributes on (tclassextenddata.attributeID = tclassextendattributes.attributeID) 
+            where tclassextendattributes.siteid='muracon' 
+            and tclassextendattributes.name= 
+            'elasticSearchLastIndexedContent' 
+            and 
+            datetimevalue 
+            > 
+            :siteLastIndexed
+            ) 
+            ) 
+            AND 
+            ( 
+            tcontent.Display = 1 
+            OR 
+            ( 
+            tcontent.Display = 2 
+            AND 
+            ( 
+            ( 
+            tcontent.DisplayStart <= now() 
+            AND (tcontent.DisplayStop >= now() or tcontent.DisplayStop is null) 
+            ) 
+            OR 
+            tparent.type='Calendar' 
+            ) 
+            ) 
+            ) 
+            and (tcontent.mobileExclude is null 
+            OR 
+            tcontent.mobileExclude in (0,1) 
+            ) 
+            order by 
+            tcontent.lastUpdate desc 
+            limit #limit#
+        ");
+        q.addParam(
+            name="siteLastIndexed",
+            value=getMuraSite(siteid).getValue("elasticSearchLastIndexed"),
+            cfsqltype="cf_sql_timestamp"
+        );
+        return getBean("contentIterator").setQuery(q.execute().getResult());
     }
 
 }

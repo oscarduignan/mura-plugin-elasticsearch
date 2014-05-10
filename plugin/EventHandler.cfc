@@ -9,7 +9,11 @@ component persistent="false" accessors="true" output="false" extends="mura.plugi
     }
 
     public void function onContentSave(required struct $) {
-        getBean("MuraElasticSearchService").updateIndex(content=$.getContentBean());
+        getBean("MuraElasticSearchService").update(content=$.getContentBean());
+    }
+
+    public void function onContentDelete(required struct $) {
+        getBean("MuraElasticSearchService").remove(content=$.getContentBean());
     }
 
 }

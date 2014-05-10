@@ -107,4 +107,59 @@ component extends="mxunit.framework.TestCase" {
 
     // function test_changeAlias_should_?_when_given_a_non_existant_alias() {}
 
+    function test_insertDocument_should_insert_document_when_given_a_valid_document() {
+        var index = testIndices[1];
+        var type = "test";
+        var id = "1";
+        elasticSearch.createIndex(index);
+        assertFalse(elasticSearch.documentExists(index, type, id));
+        elasticSearch.insertDocument(
+            index=index,
+            type=type,
+            id=id,
+            body={title="test"}
+        );
+        assertTrue(elasticSearch.documentExists(index, type, id));
+    }
+
+    // function test_insertDocument_should_?_when_given_an_invalid_document() {}
+
+    function test_removeDocument_should_remove_document_when_document_exists() {
+        var index = testIndices[1];
+        var type = "test";
+        var id = "1";
+        elasticSearch.createIndex(index);
+        elasticSearch.insertDocument(
+            index=index,
+            type=type,
+            id=id,
+            body={title="test"}
+        );
+        assertTrue(elasticSearch.documentExists(index, type, id));
+        elasticSearch.removeDocument(
+            index=index,
+            type=type,
+            id=id
+        );
+    }
+
+    // function test_removeDocument_should_?_when_document_does_not_exist() {}
+
+    function test_search_should_find_document_if_it_exists() {
+        var index = testIndices[1];
+        elasticSearch.createIndex(index);
+        elasticSearch.insertDocument(
+            index=index,
+            type="test",
+            id=1,
+            body={title="test"}
+        );
+        elasticSearch.refreshIndex(index);
+        assertTrue(arrayLen(elasticSearch.search(index=index, type="test", body={
+            "query"={
+                "match_all"={}
+            }
+        }).json().hits.hits));
+    }
+
 }
